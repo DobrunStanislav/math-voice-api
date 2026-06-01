@@ -92,26 +92,40 @@ def parse_math():
     raw_math = parser.parse(text)
 
     try:
-        clean_string = raw_math.replace("()", "(?)")
-        custom_symbols = {"?": sp.Symbol("?")}
-        expr = sp.sympify(clean_string, evaluate=False, locals=custom_symbols)
+        # 1. Якщо це РІВНЯННЯ (є знак дорівнює)
+        if "=" in raw_math:
+            left_part, right_part = raw_math.split("=", 1)
+            
+            # Обробляємо ліву і праву частини незалежно одна від одної
+            left_expr = sp.sympify(left_part.replace("()", "(?)"), evaluate=False, locals={"?": sp.Symbol("?")})
+            right_expr = sp.sympify(right_part.replace("()", "(?)"), evaluate=False, locals={"?": sp.Symbol("?")})
+            
+            # Збираємо ідеальний LaTeX з дорівнює по центру
+            latex_formula = f"${sp.latex(left_expr)} = {sp.latex(right_expr)}$"
+            plain_formula = f"{left_expr} = {right_expr}"
+            
+        # 2. Якщо це звичайний ВИРАЗ (без дорівнює)
+        else:
+            clean_string = raw_math.replace("()", "(?)")
+            expr = sp.sympify(clean_string, evaluate=False, locals={"?": sp.Symbol("?")})
+            
+            latex_formula = f"${sp.latex(expr)}$"
+            plain_formula = str(expr)
 
-        # Формат 1: Складний LaTeX (для Moodle/Docs)
-        latex_formula = f"${sp.latex(expr)}$"
-
-        # Формат 2: Звичайний текст (для Miro, чатів)
-        # Додаємо заміну sqrt на √, pi на π та альфа/бета на символи для красивого виводу
-        plain_formula = str(expr).replace('**', '^').replace('sqrt', '√').replace('pi', 'π')
+        # Робимо текстовий формат красивішим (для Miro)
+        plain_formula = plain_formula.replace('**', '^').replace('sqrt', '√').replace('pi', 'π')
         plain_formula = plain_formula.replace('alpha', 'α').replace('beta', 'β').replace('gamma', 'γ')
 
     except Exception as e:
         print(f"Помилка SymPy: {e}")
-        latex_formula = raw_math
-        # Заміна спецсимволів навіть якщо вираз обірвався
-        plain_formula = raw_math.replace('sqrt', '√').replace('pi', 'π')
+        # Якщо SymPy все ж падає, робимо псевдо-LaTeX своїми руками, щоб не віддавати сирий Python-код
+        fallback_latex = raw_math.replace('**', '^').replace('sqrt', '\\sqrt').replace('pi', '\\pi')
+        fallback_latex = fallback_latex.replace('alpha', '\\alpha ').replace('beta', '\\beta ').replace('gamma', '\\gamma ')
+        latex_formula = f"${fallback_latex}$"
+        
+        plain_formula = raw_math.replace('**', '^').replace('sqrt', '√').replace('pi', 'π')
         plain_formula = plain_formula.replace('alpha', 'α').replace('beta', 'β').replace('gamma', 'γ')
 
-    # Відправляємо браузеру обидва формати
     return jsonify({
         "latex": latex_formula,
         "plain": plain_formula
